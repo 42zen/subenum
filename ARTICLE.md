@@ -7,7 +7,7 @@ A few months ago, I started pen-testing companies for bounties again. The first 
 ![debugging](./images/debugging.png)
 
 
-First, I started reimplementing the APIs that were broken, but after a few lines of code, I realized it would be much easier to rewrite the whole tool. I began with the **VirusTotal API**, which now requires an API key because the web endpoint is **no longer accessible without captchas**. Then, I discovered a **Shodan API** call I wasn’t aware of that allows anyone to list subdomains. After that, I added some old-school websites to find subdomains: **crt.sh**, **DNSDumpster**, and **ThreatCrowd**. Finally, I wrote the search engine modules for **Google**, **Yahoo**, and **Bing**. With a small layer of multithreading, I ended up with a tool that can find lots of subdomains in just **a few seconds**.
+First, I started reimplementing the APIs that were broken, but after a few lines of code, I realized it would be much easier to rewrite the whole tool. I began with the **VirusTotal API**, which now requires an API key because the web endpoint is **no longer accessible without captchas**. Then, I discovered a **Shodan API** call I wasn’t aware of that allows anyone to list subdomains. After that, I added some old-school websites to find subdomains: **crt.sh**, **DNSDumpster**, and **ThreatCrowd**. Finally, I wrote the search engine modules for **Google**, **Yahoo**, and **Bing**. With a small layer of multithreading, I ended up with a tool called **subenum** that can find lots of subdomains in **just a few seconds**.
 
 
 ![subenum](./images/subenum.png)
