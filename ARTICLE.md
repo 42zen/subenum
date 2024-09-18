@@ -1,13 +1,13 @@
 # Sublist3r is dead, so I rebuilt it and added it to pypi
 
 
-A few months ago, I started pen-testing companies for bounties again. The first step of any cybersecurity audit is **recon**naissance, and a major part of that is finding subdomains. To do this, there's a well-known tool called Sublist3r, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain listed on VirusTotal. Upon debugging, I discovered that only one of the tool's APIs was functioning properly, while the others were completely outdated.
+A few months ago, I started pen-testing companies for bounties again. The first step of any cybersecurity audit is **recon**naissance, and a major part of that is **finding subdomains**. To do this, there's a well-known tool called **Sublist3r**, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain listed on VirusTotal. Upon debugging, I discovered that **only one** of the tool's APIs was functioning properly, while the others were **completely outdated**.
 
 
 ![debugging](./images/debugging.png)
 
 
-First, I started reimplementing the APIs that were broken, but after a few lines of code, I realized it would be much easier to rewrite the whole tool. I began with the VirusTotal API, which now requires an API key because the web endpoint is no longer accessible without captchas. Then, I discovered a Shodan API call I wasn’t aware of that allows anyone to list subdomains. After that, I added some old-school websites to find subdomains: crt.sh, DNSDumpster, and ThreatCrowd. Finally, I wrote the search engine modules for Google, Yahoo, and Bing. With a small layer of multithreading, I ended up with a tool that can find lots of subdomains in just a few seconds.
+First, I started reimplementing the APIs that were broken, but after a few lines of code, I realized it would be much easier to rewrite the whole tool. I began with the **VirusTotal API**, which now requires an API key because the web endpoint is **no longer accessible without captchas**. Then, I discovered a **Shodan API** call I wasn’t aware of that allows anyone to list subdomains. After that, I added some old-school websites to find subdomains: **crt.sh**, **DNSDumpster**, and **ThreatCrowd**. Finally, I wrote the search engine modules for **Google**, **Yahoo**, and **Bing**. With a small layer of multithreading, I ended up with a tool that can find lots of subdomains in just **a few seconds**.
 
 
 ![subenum](./images/subenum.png)
