@@ -1,7 +1,9 @@
-# Sublist3r is dead, so I rebuilt it and added it to pypi
+# Sublist3r is outdated, so I rebuilt it and published it on PyPI
 
 
-A few months ago, I started pen-testing companies for bounties again. The first step of any cybersecurity audit is **recon**naissance, and a major part of that is **finding subdomains**. To do this, there's a well-known tool called **Sublist3r**, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain listed on VirusTotal. Upon debugging, I discovered that **only one** of the tool's APIs was functioning properly, while the others were **completely outdated**.
+When it comes to hacking a server, the first critical step is **recon**naissance. We need to find out how many doors there are so we can picklock them. And to do that, we find subdomains. If hacking into `facebook.com` is too hard, we will hack into `creators.facebook.com` and try to gain some access from there instead. `facebook.com` is the domain, `creators.facebook.com` is a subdomain.
+
+To find subdomains, there's a well-known tool called **Sublist3r**, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain listed on VirusTotal. Upon debugging, I discovered that **only one** of the tool's APIs was functioning properly, while the others were **completely outdated**.
 
 
 ![debugging](./images/debugging.png)
@@ -39,7 +41,8 @@ SHODAN_API_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYYYY
 ```
 It's free to make an account on Shodan or VirusTotal.
 
-You can check the source-code [here](https://github.com/42zen/subenum)
+
+You can check the source-code [here](https://github.com/42zen/subenum).
 
 
 By [Zen](https://www.linkedin.com/in/mathias-bochet/)

@@ -70,6 +70,8 @@ class SubEnum():
         self.modules.append(Google(verbose=verbose))
         self.modules.append(Bing(verbose=verbose))
         self.modules.append(Yahoo(verbose=verbose))
+
+        # load all the modules that needs api keys
         if vt_api_key is not None:
             self.modules.append(VirusTotal(vt_api_key, verbose=verbose))
         if shodan_api_key is not None:
@@ -77,17 +79,17 @@ class SubEnum():
 
     # get a list of subdomains
     def get_subdomains(self, domain):
-        start_time = time()
 
         # get the subdomains from all the modules
+        start_time = time()
         subdomains = self.run_modules_scan(domain)
+        elapsed_time = "%0.2f" % (time() - start_time)
 
         # sort all the subdomains
         subdomains = self.sort_subdomains(subdomains)
 
         # print the number of subdomains found
         if self.verbose == True:
-            elapsed_time = "%0.2f" % (time() - start_time)
             print(f"[*] Found a total of {len(subdomains)} subdomains in {elapsed_time} secs.")
 
         # return all the subdomains
@@ -128,8 +130,7 @@ class SubEnum():
             if all((char.isalnum() or char in ['-', '.']) for char in subdomain) == True:
                 valid_subdomains.append(subdomain)
                 continue
-        valid_subdomains = sorted(valid_subdomains)
-        return valid_subdomains
+        return sorted(valid_subdomains)
 
 
 # default module api class
@@ -266,20 +267,30 @@ class ThreatCrowd(ModuleApi):
 
     # download a domain report
     def query_domain(self, domain):
+
+        # query the website
         params = { 'domain': domain }
         response = self.session.get(self.base_url, params=params)
+
+        # check for errors
         if response.status_code != 200:
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the text response
         return response.text
     
     # parse a domain report
     def parse_query_response(self, text, domain):
+
+        # find where the subdomains are
         pos = text.find("elements: {")
         end_pos = text.find("edges: [")
         text = text[pos:end_pos]
         lines = text.split('\n')
+
+        # parse all subdomains
         subdomains = []
         for line in lines:
             pos = line.find("id: '")
@@ -295,6 +306,8 @@ class ThreatCrowd(ModuleApi):
                     if id in subdomains:
                         continue
                     subdomains.append(id)
+
+        # return the list of subdomains
         return subdomains
 
 
@@ -308,9 +321,13 @@ class CertificatesSearch(ModuleApi):
     
     # query a domain informations from crt.sh
     def query_domain(self, domain, try_count=0):
+
+        # query the website
         params = { 'q': domain }
         response = self.session.get(self.base_url, params=params)
-        if response.status_code == 503:
+
+        # check for errors
+        if response.status_code in [502, 503]:
             if try_count < 3:
                 return self.query_domain(domain, try_count=try_count + 1)
             if self.verbose == True:
@@ -320,12 +337,18 @@ class CertificatesSearch(ModuleApi):
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the text response
         return response.text
     
     # parse a query response from crt.sh
     def parse_query_response(self, text, domain):
-        subdomains = []
+
+        # convert the text response to html
         soup = BeautifulSoup(text, features="html.parser")
+
+        # parse the subdomains from the html
+        subdomains = []
         outers = soup.find_all('td', {'class': 'outer'})
         for outer in outers:
             elems_list = outer.find_all("tr")
@@ -346,6 +369,8 @@ class CertificatesSearch(ModuleApi):
                                 if subdomain not in subdomains:
                                     subdomains.append(subdomain)
                         field_id += 1
+        
+        # return the subdomains found
         return subdomains
 
 
@@ -390,11 +415,17 @@ class DNSDumpster(ModuleApi):
     
     # query a csrf token from dnsdumpster
     def query_csrf_token(self):
+
+        # query the website
         response = self.session.get(self.base_url)
+
+        # check for errors
         if response.status_code != 200:
             if self.verbose == True:
                 self.print_error(f"received unknown response code '{response.status_code}' while trying to get csrf token.")
             return None
+        
+        # return the response text
         return response.text
     
     # parse a query response
@@ -405,21 +436,31 @@ class DNSDumpster(ModuleApi):
     
     # query a domain informations from dnsdumpster
     def query_domain(self, domain, csrf_token):
+
+        # query the website
         cookies = { 'csrftoken': self.session.cookies["csrftoken"] }
         headers = { 'referer': 'https://dnsdumpster.com/' }
         data = { 'csrfmiddlewaretoken': csrf_token, 'targetip': domain, 'user': 'free' }
         response = self.session.post(self.base_url, cookies=cookies, headers=headers, data=data)
+
+        # check for errors
         if response.status_code != 200:
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the response text
         return response.text
     
     # parse a query response from dnsdumpster
     def parse_query_response(self, text, domain):
-        subdomains = []
+        
+        # convert the text response to html
         soup = BeautifulSoup(text, features="html.parser")
         tables = soup.find_all('table', {'class': 'table'})
+
+        # parse the subdomains from the tables
+        subdomains = []
         for table in tables:
             td_list = table.find_all('td', {'class': 'col-md-4'})
             for td in td_list:
@@ -432,6 +473,8 @@ class DNSDumpster(ModuleApi):
                         if subdomain not in subdomains:
                             subdomains.append(subdomain)
                     break
+
+        # return the subdomains found
         return subdomains
 
 
@@ -445,9 +488,13 @@ class Google(ModuleSearchEngine):
 
     # query a domain page from google
     def query_domain_page(self, domain, page):
+
+        # query the website
         headers = { 'user-agent': UserAgent().random }
         params = { 'q': domain, 'start': (page - 1) * 10 }
         response = self.session.get(self.base_url, headers=headers, params=params)
+
+        # check for errors
         if response.status_code == 429:
             if self.verbose == True:
                 self.print_error(f"too many requests.")
@@ -456,6 +503,8 @@ class Google(ModuleSearchEngine):
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the response text
         return response.text
     
     # parse the query response from google
@@ -486,7 +535,7 @@ class Google(ModuleSearchEngine):
         # check if we are shadow banned
         if total_urls == 0:
             if self.verbose == True:
-                #self.print_error("shadow ban detected.")
+                self.print_error("shadow ban detected.")
                 pass
             return None
         
@@ -513,31 +562,45 @@ class Bing(ModuleSearchEngine):
 
     # query the domain from bing
     def query_domain_page(self, domain, page):
+        
+        # query the website
         headers = { 'user-agent': self.user_agent }
         first = '1' if page == 1 else f"{(page - 1)}1"
         params = { 'q': domain, 'first': first }
         response = self.session.get(self.base_url, headers=headers, params=params)
+
+        # check for errors
         if response.status_code != 200:
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the response text
         return response.text
     
     # parse a query response from bing
     def parse_query_response(self, text, domain):
+
+        # convert the text response to html
         try:
             soup = BeautifulSoup(text, features="html.parser")
         except TypeError:
             if self.verbose == True:
                 self.print_error("received unknown content type.")
             return None
+        
+        # check if we got a captcha
         title = soup.find('title').text
         if title.find(domain) == -1:
             if self.verbose == True:
                 self.print_error("captcha detected.")
             return None
+        
+        # parse the results from the html
         b_results = soup.find('ol', {'id': 'b_results'})
         results = b_results.find_all('li', {'class': 'b_algo'})
+
+        # parse all subdomains from the results
         subdomains = []
         results_domains = []
         for result in results:
@@ -553,10 +616,14 @@ class Bing(ModuleSearchEngine):
                 results_domains.append(result_domain)
             if result_domain.endswith(domain) == True:
                 subdomains.append(result_domain)
+        
+        # check if we got a shadow ban
         if results_domains == [ 'www.bing.com' ]:
             if self.verbose == True:
                 self.print_error("shadow ban detected.")
             return None
+        
+        # return the list of subdomains
         return subdomains
 
 
@@ -571,6 +638,8 @@ class Yahoo(ModuleSearchEngine):
 
     # query the domain from yahoo
     def query_domain_page(self, domain, page):
+        
+        # query the website
         headers = { 'user-agent': self.user_agent }
         params = {
             'p': domain,
@@ -582,10 +651,14 @@ class Yahoo(ModuleSearchEngine):
             page_offset = ((page - 1) * 7) + 1
             params['b']  = page_offset
         response = self.session.get(self.base_url, headers=headers, params=params)
+
+        # check for errors
         if response.status_code != 200:
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the response
         return response
     
     # parse a query response from yahoo
@@ -640,11 +713,17 @@ class VirusTotal(ModuleApiWithKey):
 
     # get a list of subdomains
     def get_subdomains(self, domain):
+
+        # download all subdomains from a domain
         if self.verbose == True:
             self.print("Starting subdomains discovery...")
         self.subdomains = self.download_relationship(domain)
+
+        # check if we got an error
         if self.subdomains is None:
             return None
+        
+        # return the list of subdomains found
         if self.verbose == True:
             subdomains_count = len(self.subdomains)
             self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
@@ -652,64 +731,95 @@ class VirusTotal(ModuleApiWithKey):
 
     # download a relationship
     def download_relationship(self, domain):
+
+        # download the first domain page
         results = self.download_relationship_page(domain)
         if results is None:
             return None
+        
+        # parse the subdomains from the first page
         subdomains = []
         for subdomain in results['data']:
             if subdomain['id'] not in subdomains:
                 subdomains.append(subdomain['id'])
+
+        # parse the next page cursor from the first page
         cursor = None
         if 'cursor' in results['meta']:
             cursor = results['meta']['cursor']
+
+        # download pages until there is no next one
         while cursor is not None:
+
+            # download the next domain page
             results = self.download_relationship_page(domain, cursor=cursor)
             if results is None:
-                return None
+                break
+            
+            # parse the subdomains from the next page
             for subdomain in results['data']:
                 if subdomain['id'] not in subdomains:
                     subdomains.append(subdomain['id'])
+
+            # parse the next page cursor from the next page
             cursor = None
             if 'cursor' in results['meta']:
                 cursor = results['meta']['cursor']
+
+        # return a list of all subdomains found
         return subdomains
     
     # download a relationship page
     def download_relationship_page(self, domain, cursor=None, limit=40):
+        
+        # query the api
         url = self.base_url + f"{domain}/subdomains"
         params = { 'limit': limit }
         if cursor is not None:
             params['cursor'] = cursor
         headers = { 'x-apikey': self.api_key }
         response = self.session.get(url, headers=headers, params=params)
+
+        # check for errors
         if response.status_code == 401:
             if response.text.find("Wrong API key") != -1:
                 self.print_error(f"invalid api key.")
             else:
                 self.print_error(f"unauthorized.")
             return None
+        elif response.status_code == 429:
+            self.print_error(f"too many requests.")
+            return None
         elif response.status_code != 200:
             self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the json response
         return response.json()
 
 
 # Shodan api
 class Shodan(ModuleApiWithKey):
 
-    # create a crtsh object
+    # create a shodan object
     def __init__(self, api_key, verbose=True):
         super().__init__(api_key, verbose=verbose)
         self.base_url = "https://api.shodan.io/dns/domain/"
     
     # query a domain information from shodan
     def query_domain(self, domain):
+
+        # query the api
         params = { 'key': self.api_key }
         response = self.session.get(self.base_url + domain, params=params)
+
+        # check for errors
         if response.status_code != 200:
             if self.verbose == True:
                 self.print_error(f"received unknown response code: '{response.status_code}'.")
             return None
+        
+        # return the json response
         return response.json()
     
     # parse the query response
