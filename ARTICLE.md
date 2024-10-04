@@ -1,15 +1,15 @@
-# Sublist3r is outdated, so I rebuilt it and published it on PyPI
+# Sublist3r is dead, so I rebuilt it and published it on PyPI
 
 
-When it comes to hacking a server, the first critical step is **recon**naissance. We need to find out how many doors there are so we can picklock them. And to do that, we find subdomains. If hacking into `facebook.com` is too hard, we will hack into `creators.facebook.com` and try to gain some access from there instead. `facebook.com` is the domain, `creators.facebook.com` is a subdomain.
+When it comes to hacking a server, the first step is **recon**naissance. We need to find out how many doors there are so we can picklock them. And to do that, we find **subdomains**. If hacking into `facebook.com` is too hard, we will hack into `creators.facebook.com` and try to gain some access from there instead. `facebook.com` is the domain, `creators.facebook.com` the subdomain.
 
-To find subdomains, there's a well-known tool called **Sublist3r**, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain listed on VirusTotal. Upon debugging, I discovered that **only one** of the tool's APIs was functioning properly, while the others were **completely outdated**.
+To find subdomains, there is a well-known tool called **Sublist3r**, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain listed on VirusTotal. Upon debugging, I discovered that **only one** of the tool's APIs was functioning properly, while the others were **completely outdated**.
 
 
 ![debugging](./images/debugging.png)
 
 
-First, I started reimplementing the APIs that were broken, but after a few lines of code, I realized it would be much easier to rewrite the whole tool. I began with the **VirusTotal API**, which now requires an API key because the web endpoint is **no longer accessible without captchas**. Then, I discovered a **Shodan API** call I wasn’t aware of that allows anyone to list subdomains. After that, I added some old-school websites to find subdomains: **crt.sh**, **DNSDumpster**, and **ThreatCrowd**. Finally, I wrote the search engine modules for **Google**, **Yahoo**, and **Bing**. With a small layer of multithreading, I ended up with a tool called **subenum** that can find lots of subdomains in **just a few seconds**.
+First, I started reimplementing the APIs that were broken, but after a few lines of code, I realized it would be much easier to rewrite the whole tool. I began with the **VirusTotal API**, which now requires an API key because the web endpoint is **no longer accessible without captchas**. Then, I discovered a **Shodan API** call I wasn’t aware of that allows anyone to list subdomains. After that, I added some old-school websites to find subdomains: **crt.sh**, **DNSDumpster**, and **ThreatCrowd**. Finally, I wrote the search engine modules for **Google**, **Yahoo**, and **Bing** and with a small layer of multithreading, I ended up with a tool called **subenum**, that can find lots of subdomains in **just a few seconds**.
 
 
 ![subenum](./images/subenum.png)
@@ -24,11 +24,11 @@ Once installed, you can access the **subenum** command directly from your termin
 This will print all the subdomains. If you want to **save them to a text file**, you can add the following parameter:
 > subenum example.com -o subdomains.txt
 
-Or you can use it directly in python:
+Or you can use it directly in your python project:
 ```
 from subenum import SubEnum
-VIRUSTOTAL_API_KEY = 'XXXX'
-SHODAN_API_KEY = 'YYYY'
+VIRUSTOTAL_API_KEY = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+SHODAN_API_KEY = 'YYYYYYYYYYYYYYYYYYYYYYYYYYYY'
 subdomains = SubEnum(vt_api_key=VIRUSTOTAL_API_KEY, shodan_api_key=SHODAN_API_KEY).get_subdomains("example.com")
 for subdomain in subdomains:
     print(subdomain)
@@ -39,7 +39,7 @@ The tool works without any API keys, but if you want to maximize your results, y
 VIRUSTOTAL_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 SHODAN_API_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYYYY
 ```
-It's free to make an account on Shodan or VirusTotal.
+It's free to make an account on [Shodan](https://www.shodan.io/) or [VirusTotal](https://www.virustotal.com/).
 
 
 You can check the source-code [here](https://github.com/42zen/subenum).

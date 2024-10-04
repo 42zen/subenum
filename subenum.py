@@ -604,7 +604,12 @@ class Bing(ModuleSearchEngine):
         subdomains = []
         results_domains = []
         for result in results:
-            link = result.find('a', {'class': 'tilk'})['href']
+            link = result.find('a', {'class': 'tilk'})
+            if link is None:
+                if self.verbose == True:
+                    self.print_error("shadow ban detected.")
+                return None
+            link = link['href']
             if link.startswith('https://') == True:
                 result_domain = link[8:]
             elif link.startswith('http://') == True:
