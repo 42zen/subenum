@@ -30,6 +30,7 @@ def main():
     parser = ArgumentParser(description="Subdomains Enumerator")
     parser.add_argument('domain', type=str, help="Domain to search for subdomains")
     parser.add_argument('-o', '--output', type=str, help="Save the output in a text file")
+    parser.add_argument('-f', '--fast', action='store_true', help="Enable fast mode")
     parser.add_argument('-q', '--quiet', action='store_true', help="Disable verbosity")
     args = parser.parse_args()
 
@@ -40,7 +41,7 @@ def main():
 
     # get the subdomains from subenum
     verbose = True if args.quiet == False else False
-    subenum = SubEnum(verbose=verbose, vt_api_key=vt_api_key, shodan_api_key=shodan_api_key)
+    subenum = SubEnum(verbose=verbose, vt_api_key=vt_api_key, shodan_api_key=shodan_api_key, fast=args.fast)
     subdomains = subenum.get_subdomains(args.domain)
 
     # print the subdomains is there is no output
@@ -59,7 +60,7 @@ def main():
 class SubEnum():
 
     # create a subenum object
-    def __init__(self, verbose=True, vt_api_key=None, shodan_api_key=None):
+    def __init__(self, verbose=True, vt_api_key=None, shodan_api_key=None, fast=False):
         self.verbose = verbose
 
         # load all the modules
@@ -67,13 +68,13 @@ class SubEnum():
         self.modules.append(ThreatCrowd(verbose=verbose))
         self.modules.append(CertificatesSearch(verbose=verbose))
         self.modules.append(DNSDumpster(verbose=verbose))
-        self.modules.append(Google(verbose=verbose))
-        self.modules.append(Bing(verbose=verbose))
-        self.modules.append(Yahoo(verbose=verbose))
+        self.modules.append(Google(verbose=verbose, fast=fast))
+        self.modules.append(Bing(verbose=verbose, fast=fast))
+        self.modules.append(Yahoo(verbose=verbose, fast=fast))
 
         # load all the modules that needs api keys
         if vt_api_key is not None:
-            self.modules.append(VirusTotal(vt_api_key, verbose=verbose))
+            self.modules.append(VirusTotal(vt_api_key, verbose=verbose, fast=fast))
         if shodan_api_key is not None:
             self.modules.append(Shodan(shodan_api_key, verbose=verbose))
 
@@ -137,11 +138,12 @@ class SubEnum():
 class ModuleApi:
 
     # create an api object
-    def __init__(self, verbose=True):
+    def __init__(self, verbose=True, fast=False):
         self.base_name = self.__class__.__name__
         self.session = Session()
         self.verbose = verbose
         self.subdomains = None
+        self.fast_scan = fast
 
     # get the subdomains from the api
     def get_subdomains(self, domain):
@@ -236,6 +238,10 @@ class ModuleSearchEngine(ModuleApi):
             for subdomain in page_subdomains:
                 if subdomain not in self.subdomains:
                     self.subdomains.append(subdomain)
+
+            # stop at the first page if we are in fast mode
+            if self.fast_scan == True:
+                break
 
         # return the complete list of all subdomains found
         if self.verbose == True:
@@ -712,8 +718,8 @@ class Yahoo(ModuleSearchEngine):
 class VirusTotal(ModuleApiWithKey):
 
     # create a VirusTotal object
-    def __init__(self, api_key, verbose=True):
-        super().__init__(api_key, verbose=verbose)
+    def __init__(self, api_key, verbose=True, fast=False):
+        super().__init__(api_key, verbose=verbose, fast=fast)
         self.base_url = "https://www.virustotal.com/api/v3/domains/"
 
     # get a list of subdomains
@@ -747,6 +753,10 @@ class VirusTotal(ModuleApiWithKey):
         for subdomain in results['data']:
             if subdomain['id'] not in subdomains:
                 subdomains.append(subdomain['id'])
+
+        # return the first page if we do a fast scan
+        if self.fast_scan == True:
+            return subdomains
 
         # parse the next page cursor from the first page
         cursor = None
