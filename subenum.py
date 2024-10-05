@@ -89,7 +89,7 @@ class SubEnum():
         if shodan_api_key is not None:
             self.modules.append(Shodan(shodan_api_key, verbose=verbose))
         if censys_appid is not None and censys_secret is not None:
-            self.modules.append(Censys(censys_appid, censys_secret, verbose=verbose))
+            self.modules.append(Censys(censys_appid, censys_secret, verbose=verbose, fast=fast))
 
     # get a list of subdomains
     def get_subdomains(self, domain):
@@ -927,7 +927,7 @@ class Shodan(ModuleApiWithKey):
 class Censys(ModuleApiWithAuth):
 
     # create a censys object
-    def __init__(self, app_id, secret, verbose=True, fast=True):
+    def __init__(self, app_id, secret, verbose=True, fast=False):
         super().__init__(app_id, secret, verbose=verbose, fast=fast)
         self.base_url = 'https://search.censys.io/api/v2/certificates/search'
 
