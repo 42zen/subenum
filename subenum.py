@@ -506,6 +506,59 @@ class DNSDumpster(ModuleApi):
         return subdomains
 
 
+# MerkleMap api
+class MerkleMap(ModuleApi):
+
+    # create a merklemap object
+    def __init__(self, verbose=True):
+        super().__init__(verbose=verbose)
+        self.base_url = "https://api.merklemap.com/search"
+        self.user_agent = UserAgent().random
+
+    # query a domain information from merklemap
+    def query_domain(self, domain):
+
+        # query the api
+        params = { 'query': domain }
+        response = self.session.get(self.base_url, params=params)
+
+        # check for errors
+        if response.status_code != 200:
+            if self.verbose == True:
+                self.print_error(f"received unknown response code: '{response.status_code}'.")
+            return None
+    
+        # return the json response
+        return response.json()
+
+    # parse the query response
+    def parse_query_response(self, data, domain):
+
+        # browse each subdomain from the results
+        subdomains = []
+        for subdomain in data["results"]:
+
+            # check if this is a subdomain from our domain
+            if subdomain.endswith(domain) == False:
+                continue
+
+            # remove the wildcards
+            pos = subdomain.find('*.')
+            while pos != -1:
+                subdomain = subdomain[pos + 2:]
+                pos = subdomain.find('*.')
+            if subdomain.find('*') != -1:
+                continue
+
+            # add the subdomain to the list
+            if subdomain in subdomains:
+                continue
+            subdomains.append(subdomain['domain'])
+
+        # return the list of subdomains
+        return subdomains
+    
+
 # Google api
 class Google(ModuleSearchEngine):
 
@@ -868,35 +921,6 @@ class Shodan(ModuleApiWithKey):
                 subdomains.append(full_subdomain)
         return subdomains
 
-# default module api class with a key
-class MerkleMap(ModuleApi):
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
-        self.base_url = "https://api.merklemap.com/search"
-        self.user_agent = UserAgent().random
-
-        # query a domain information from merklemap
-    def query_domain(self, domain):
-
-        # query the api
-        params = { 'query': domain }
-        response = self.session.get(self.base_url, params=params)
-
-        # check for errors
-        if response.status_code != 200:
-            if self.verbose == True:
-                self.print_error(f"received unknown response code: '{response.status_code}'.")
-            return None
-        # return the json response
-        return response.json()
-
-    def parse_query_response(self, data, domain):
-        subdomains = []
-        for subdomain in data["results"]:
-          if subdomain not in subdomains:
-            subdomains.append(subdomain['domain'])
-        return subdomains
-
 
 # Censys api
 class Censys(ModuleApiWithAuth):
@@ -919,10 +943,8 @@ class Censys(ModuleApiWithAuth):
         
         # parse the subdomains from the first pages
         page_count = 1
-        page_subdomains = self.parse_query_response(response)
+        page_subdomains = self.parse_query_response(response, domain)
         for subdomain in page_subdomains:
-            if subdomain.endswith(domain) == False:
-                continue
             if subdomain in self.subdomains:
                 continue
             self.subdomains.append(subdomain)
@@ -941,10 +963,8 @@ class Censys(ModuleApiWithAuth):
             response = self.query_domain_page(domain, cursor=cursor)
             if response is None:
                 break
-            page_subdomains = self.parse_query_response(response)
+            page_subdomains = self.parse_query_response(response, domain)
             for subdomain in page_subdomains:
-                if subdomain.endswith(domain) == False:
-                    continue
                 if subdomain in self.subdomains:
                     continue
                 self.subdomains.append(subdomain)
@@ -990,7 +1010,7 @@ class Censys(ModuleApiWithAuth):
         return response.json()
     
     # parse the subdomains from a query response
-    def parse_query_response(self, response):
+    def parse_query_response(self, response, domain):
 
         # check each certificate from the response
         subdomains = []
@@ -1004,17 +1024,7 @@ class Censys(ModuleApiWithAuth):
                 if info.startswith("CN=") == True:
                     common_name = info
             subdomain = common_name[3:]
-            pos = subdomain.find('*.')
-            while pos != -1:
-                subdomain = subdomain[pos + 2:]
-                pos = subdomain.find('*.')
-            if subdomain.find('*') == -1:
-                if subdomain not in subdomains:
-                    subdomains.append(subdomain)
-
-            # check the alternate names
-            alternate_names = certificate['names']
-            for subdomain in alternate_names:
+            if subdomain.endswith(domain) == True:
                 pos = subdomain.find('*.')
                 while pos != -1:
                     subdomain = subdomain[pos + 2:]
@@ -1022,6 +1032,21 @@ class Censys(ModuleApiWithAuth):
                 if subdomain.find('*') == -1:
                     if subdomain not in subdomains:
                         subdomains.append(subdomain)
+
+            # check the alternate names
+            alternate_names = certificate['names']
+            for subdomain in alternate_names:
+                if subdomain.endswith(domain) != True:
+                    continue
+                pos = subdomain.find('*.')
+                while pos != -1:
+                    subdomain = subdomain[pos + 2:]
+                    pos = subdomain.find('*.')
+                if subdomain.find('*') != -1:
+                    continue
+                if subdomain in subdomains:
+                    continue
+                subdomains.append(subdomain)
 
         # return the list of subdomains found
         return subdomains
