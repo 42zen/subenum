@@ -7,6 +7,7 @@ banner = """
 
 try:
     from requests import Session
+    from requests.auth import HTTPBasicAuth
     from bs4 import BeautifulSoup
     from fake_useragent import UserAgent
     from urllib.parse import unquote
@@ -14,7 +15,7 @@ try:
     from os import getenv
     from dotenv import load_dotenv
     from threading import Thread
-    from time import time
+    from time import time, sleep
 except KeyboardInterrupt:
     print(banner)
     print("[*] Exiting...")
@@ -30,6 +31,7 @@ def main():
     parser = ArgumentParser(description="Subdomains Enumerator")
     parser.add_argument('domain', type=str, help="Domain to search for subdomains")
     parser.add_argument('-o', '--output', type=str, help="Save the output in a text file")
+    parser.add_argument('-f', '--fast', action='store_true', help="Enable fast mode")
     parser.add_argument('-q', '--quiet', action='store_true', help="Disable verbosity")
     args = parser.parse_args()
 
@@ -37,10 +39,19 @@ def main():
     load_dotenv()
     vt_api_key = getenv('VIRUSTOTAL_API_KEY')
     shodan_api_key = getenv('SHODAN_API_KEY')
+    censys_appid = getenv('CENSYS_APP_ID')
+    censys_secret = getenv('CENSYS_SECRET')
 
     # get the subdomains from subenum
     verbose = True if args.quiet == False else False
-    subenum = SubEnum(verbose=verbose, vt_api_key=vt_api_key, shodan_api_key=shodan_api_key)
+    subenum = SubEnum(
+        verbose=verbose,
+        vt_api_key=vt_api_key,
+        shodan_api_key=shodan_api_key,
+        censys_appid=censys_appid,
+        censys_secret=censys_secret,
+        fast=args.fast
+    )
     subdomains = subenum.get_subdomains(args.domain)
 
     # print the subdomains is there is no output
@@ -59,7 +70,7 @@ def main():
 class SubEnum():
 
     # create a subenum object
-    def __init__(self, verbose=True, vt_api_key=None, shodan_api_key=None):
+    def __init__(self, verbose=True, vt_api_key=None, shodan_api_key=None, censys_appid=None, censys_secret=None, fast=False):
         self.verbose = verbose
 
         # load all the modules
@@ -67,15 +78,18 @@ class SubEnum():
         self.modules.append(ThreatCrowd(verbose=verbose))
         self.modules.append(CertificatesSearch(verbose=verbose))
         self.modules.append(DNSDumpster(verbose=verbose))
-        self.modules.append(Google(verbose=verbose))
-        self.modules.append(Bing(verbose=verbose))
-        self.modules.append(Yahoo(verbose=verbose))
+        self.modules.append(Google(verbose=verbose, fast=fast))
+        self.modules.append(Bing(verbose=verbose, fast=fast))
+        self.modules.append(Yahoo(verbose=verbose, fast=fast))
         self.modules.append(MerkleMap(verbose=verbose))
+
         # load all the modules that needs api keys
         if vt_api_key is not None:
-            self.modules.append(VirusTotal(vt_api_key, verbose=verbose))
+            self.modules.append(VirusTotal(vt_api_key, verbose=verbose, fast=fast))
         if shodan_api_key is not None:
             self.modules.append(Shodan(shodan_api_key, verbose=verbose))
+        if censys_appid is not None and censys_secret is not None:
+            self.modules.append(Censys(censys_appid, censys_secret, verbose=verbose))
 
     # get a list of subdomains
     def get_subdomains(self, domain):
@@ -137,11 +151,12 @@ class SubEnum():
 class ModuleApi:
 
     # create an api object
-    def __init__(self, verbose=True):
+    def __init__(self, verbose=True, fast=False):
         self.base_name = self.__class__.__name__
         self.session = Session()
         self.verbose = verbose
         self.subdomains = None
+        self.fast_scan = fast
 
     # get the subdomains from the api
     def get_subdomains(self, domain):
@@ -237,6 +252,10 @@ class ModuleSearchEngine(ModuleApi):
                 if subdomain not in self.subdomains:
                     self.subdomains.append(subdomain)
 
+            # stop at the first page if we are in fast mode
+            if self.fast_scan == True:
+                break
+
         # return the complete list of all subdomains found
         if self.verbose == True:
             subdomains_count = len(self.subdomains)
@@ -252,9 +271,18 @@ class ModuleSearchEngine(ModuleApi):
 class ModuleApiWithKey(ModuleApi):
 
     # create an api object
-    def __init__(self, api_key, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, api_key, verbose=True, fast=False):
+        super().__init__(verbose=verbose, fast=fast)
         self.api_key = api_key
+
+
+# default module api class with an auth
+class ModuleApiWithAuth(ModuleApi):
+
+    # create an api object
+    def __init__(self, username, password, verbose=True, fast=False):
+        super().__init__(verbose=verbose, fast=fast)
+        self.auth = HTTPBasicAuth(username, password)
 
 
 # ThreatCrowd api
@@ -482,8 +510,8 @@ class DNSDumpster(ModuleApi):
 class Google(ModuleSearchEngine):
 
     # create a google object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, fast=False):
+        super().__init__(verbose=verbose, fast=fast)
         self.base_url = "https://www.google.com/search"
 
     # query a domain page from google
@@ -555,8 +583,8 @@ class Google(ModuleSearchEngine):
 class Bing(ModuleSearchEngine):
 
     # create a bing object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, fast=False):
+        super().__init__(verbose=verbose, fast=fast)
         self.base_url = "https://www.bing.com/search"
         self.user_agent = UserAgent().random
 
@@ -636,8 +664,8 @@ class Bing(ModuleSearchEngine):
 class Yahoo(ModuleSearchEngine):
 
     # create a yahoo object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, fast=False):
+        super().__init__(verbose=verbose, fast=fast)
         self.base_url = "https://fr.search.yahoo.com/search"
         self.user_agent = UserAgent().random
 
@@ -712,8 +740,8 @@ class Yahoo(ModuleSearchEngine):
 class VirusTotal(ModuleApiWithKey):
 
     # create a VirusTotal object
-    def __init__(self, api_key, verbose=True):
-        super().__init__(api_key, verbose=verbose)
+    def __init__(self, api_key, verbose=True, fast=False):
+        super().__init__(api_key, verbose=verbose, fast=fast)
         self.base_url = "https://www.virustotal.com/api/v3/domains/"
 
     # get a list of subdomains
@@ -747,6 +775,10 @@ class VirusTotal(ModuleApiWithKey):
         for subdomain in results['data']:
             if subdomain['id'] not in subdomains:
                 subdomains.append(subdomain['id'])
+
+        # return the first page if we do a fast scan
+        if self.fast_scan == True:
+            return subdomains
 
         # parse the next page cursor from the first page
         cursor = None
@@ -865,6 +897,135 @@ class MerkleMap(ModuleApi):
             subdomains.append(subdomain['domain'])
         return subdomains
 
+
+# Censys api
+class Censys(ModuleApiWithAuth):
+
+    # create a censys object
+    def __init__(self, app_id, secret, verbose=True, fast=True):
+        super().__init__(app_id, secret, verbose=verbose, fast=fast)
+        self.base_url = 'https://search.censys.io/api/v2/certificates/search'
+
+    # get the subdomains from a domain
+    def get_subdomains(self, domain):
+
+        # get the first page
+        if self.verbose == True:
+            self.print("Starting subdomains discovery...")
+        self.subdomains = []
+        response = self.query_domain_page(domain)
+        if response is None:
+            return self.subdomains
+        
+        # parse the subdomains from the first pages
+        page_count = 1
+        page_subdomains = self.parse_query_response(response)
+        for subdomain in page_subdomains:
+            if subdomain.endswith(domain) == False:
+                continue
+            if subdomain in self.subdomains:
+                continue
+            self.subdomains.append(subdomain)
+
+        # check if we are in fast mode
+        if self.fast_scan == True:
+            return self.subdomains
+
+        # get the next page cursor if any
+        cursor = response['result']['links']['next']
+
+        # get all next pages
+        while cursor != '' and page_count < 10:
+            page_count += 1
+            sleep(0.4)
+            response = self.query_domain_page(domain, cursor=cursor)
+            if response is None:
+                break
+            page_subdomains = self.parse_query_response(response)
+            for subdomain in page_subdomains:
+                if subdomain.endswith(domain) == False:
+                    continue
+                if subdomain in self.subdomains:
+                    continue
+                self.subdomains.append(subdomain)
+            cursor = response['result']['links']['next']
+    
+        # return the list of subdomains found
+        if self.verbose == True:
+            subdomains_count = len(self.subdomains)
+            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+        return self.subdomains
+
+    # get a domain page
+    def query_domain_page(self, domain, cursor=None):
+
+        # query the api
+        headers = { "Content-Type": "application/json" }
+        params = {
+            "q": domain,
+            "per_page": 100,
+            "cursor": cursor,
+        }
+        if cursor is not None:
+            params['cursor'] = cursor
+
+        # send the request
+        response = self.session.get(self.base_url, headers=headers, params=params, auth=self.auth)
+        
+        # check for errors
+        if response.status_code == 429:
+            if self.verbose == True:
+                self.print_error("too many requests.")
+            return None
+        elif response.status_code == 403:
+            if self.verbose == True:
+                self.print_error(f"forbidden: '{response.text}'.")
+            return None
+        elif response.status_code != 200:
+            if self.verbose == True:
+                self.print_error(f"received unknown response code: '{response.status_code}'.")
+            return None
+
+        # return the json response
+        return response.json()
+    
+    # parse the subdomains from a query response
+    def parse_query_response(self, response):
+
+        # check each certificate from the response
+        subdomains = []
+        hits = response['result']['hits']
+        for certificate in hits:
+
+            # check the common name
+            subject_dn = certificate['parsed']['subject_dn']
+            infos = subject_dn.split(", ")
+            for info in infos:
+                if info.startswith("CN=") == True:
+                    common_name = info
+            subdomain = common_name[3:]
+            pos = subdomain.find('*.')
+            while pos != -1:
+                subdomain = subdomain[pos + 2:]
+                pos = subdomain.find('*.')
+            if subdomain.find('*') == -1:
+                if subdomain not in subdomains:
+                    subdomains.append(subdomain)
+
+            # check the alternate names
+            alternate_names = certificate['names']
+            for subdomain in alternate_names:
+                pos = subdomain.find('*.')
+                while pos != -1:
+                    subdomain = subdomain[pos + 2:]
+                    pos = subdomain.find('*.')
+                if subdomain.find('*') == -1:
+                    if subdomain not in subdomains:
+                        subdomains.append(subdomain)
+
+        # return the list of subdomains found
+        return subdomains
+    
 
 # run the main function if needed
 if __name__ == "__main__":

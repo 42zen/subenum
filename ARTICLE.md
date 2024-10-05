@@ -1,7 +1,7 @@
 # Sublist3r is Dead, so I Rebuilt it and Published it on pip
 
 
-When it comes to hacking a server, the first step is **recon**naissance. We need to find as many doors as possible to try breaking in. And to do that, we find **subdomains**. If hacking into `facebook.com` is too hard, we will hack into `creators.facebook.com` and get some access from there instead. `facebook.com` is the domain, `creators.facebook.com` a subdomain.
+When it comes to hacking, the first step is **recon**naissance. We need to find as many doors as possible to try breaking in. And to do that, we find **subdomains**. If hacking into `facebook.com` is too hard, we will hack into `creators.facebook.com` and get some access from there instead. `facebook.com` is the domain, `creators.facebook.com` a subdomain.
 
 To find subdomains, there is a well-known tool called **Sublist3r**, which searches for subdomains from public sources. After using the tool for a while, I noticed it missed a subdomain that I knew was publicly listed. Upon debugging, I discovered that **only one** of the tool's APIs was functioning properly, while the others were **completely outdated**.
 
