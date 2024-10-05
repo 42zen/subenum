@@ -536,9 +536,10 @@ class MerkleMap(ModuleApi):
 
         # browse each subdomain from the results
         subdomains = []
-        for subdomain in data["results"]:
+        for result in data["results"]:
 
             # check if this is a subdomain from our domain
+            subdomain = result['domain']
             if subdomain.endswith(domain) == False:
                 continue
 
@@ -553,7 +554,7 @@ class MerkleMap(ModuleApi):
             # add the subdomain to the list
             if subdomain in subdomains:
                 continue
-            subdomains.append(subdomain['domain'])
+            subdomains.append(subdomain)
 
         # return the list of subdomains
         return subdomains
