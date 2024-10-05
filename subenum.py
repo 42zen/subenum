@@ -81,6 +81,7 @@ class SubEnum():
         self.modules.append(Google(verbose=verbose, fast=fast))
         self.modules.append(Bing(verbose=verbose, fast=fast))
         self.modules.append(Yahoo(verbose=verbose, fast=fast))
+        self.modules.append(MerkleMap(verbose=verbose))
 
         # load all the modules that needs api keys
         if vt_api_key is not None:
@@ -865,6 +866,35 @@ class Shodan(ModuleApiWithKey):
             full_subdomain = subdomain + '.' + domain
             if full_subdomain not in subdomains:
                 subdomains.append(full_subdomain)
+        return subdomains
+
+# default module api class with a key
+class MerkleMap(ModuleApi):
+    def __init__(self, verbose=True):
+        super().__init__(verbose=verbose)
+        self.base_url = "https://api.merklemap.com/search"
+        self.user_agent = UserAgent().random
+
+        # query a domain information from merklemap
+    def query_domain(self, domain):
+
+        # query the api
+        params = { 'query': domain }
+        response = self.session.get(self.base_url, params=params)
+
+        # check for errors
+        if response.status_code != 200:
+            if self.verbose == True:
+                self.print_error(f"received unknown response code: '{response.status_code}'.")
+            return None
+        # return the json response
+        return response.json()
+
+    def parse_query_response(self, data, domain):
+        subdomains = []
+        for subdomain in data["results"]:
+          if subdomain not in subdomains:
+            subdomains.append(subdomain['domain'])
         return subdomains
 
 
