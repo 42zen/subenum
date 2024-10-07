@@ -56,6 +56,7 @@ def main():
 
     # print the subdomains is there is no output
     if args.output is None:
+        print("")
         for subdomain in subdomains:
             print(subdomain)
     
@@ -86,10 +87,13 @@ class SubEnum():
         # load all the modules that needs api keys
         if vt_api_key is not None:
             self.modules.append(VirusTotal(vt_api_key, verbose=verbose, fast=fast))
+            print(f"[*] \033[92mVirusTotal\033[0m api key loaded!.")
         if shodan_api_key is not None:
             self.modules.append(Shodan(shodan_api_key, verbose=verbose))
+            print(f"[*] \033[92mShodan\033[0m api key loaded!.")
         if censys_appid is not None and censys_secret is not None:
             self.modules.append(Censys(censys_appid, censys_secret, verbose=verbose, fast=fast))
+            print(f"[*] \033[92mCensys\033[0m api key loaded!.")
 
     # get a list of subdomains
     def get_subdomains(self, domain):
