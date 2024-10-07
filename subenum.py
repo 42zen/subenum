@@ -216,6 +216,40 @@ class ModuleApi:
         # return the url domain
         return url
     
+    # get a domain from a wildcard domain
+    def get_domain_from_wildcard(self, domain):
+
+        # remove the wildcards
+        pos = domain.find('*.')
+        while pos != -1:
+            domain = domain[pos + 2:]
+            pos = domain.find('*.')
+
+        # browse each wildcards
+        pos = domain.find('*')
+        while pos != -1:
+
+            # remove the leading wildcards
+            if pos == 0:
+                domain = domain[1:]
+
+            # remove the wildcard left from the domain
+            else:
+
+                # do not take domain ending with a wildcard
+                if pos + 1 > len(domain):
+                    return None
+
+                # remove the wildcard from the subdomain
+                cleaned_domain = domain[:pos] + domain[pos + 1:]
+                domain = cleaned_domain
+                
+            # check the next wildcard
+            pos = domain.find('*')
+
+        # return the domain
+        return domain
+    
     # print a message from the module
     def print(self, text):
         print(f"[*] \033[92m{self.base_name}\033[0m: {text}")
@@ -543,12 +577,9 @@ class MerkleMap(ModuleApi):
             if subdomain.endswith(domain) == False:
                 continue
 
-            # remove the wildcards
-            pos = subdomain.find('*.')
-            while pos != -1:
-                subdomain = subdomain[pos + 2:]
-                pos = subdomain.find('*.')
-            if subdomain.find('*') != -1:
+            # remove the wildcards from the subdomain
+            subdomains = self.get_domain_from_wildcard(subdomains)
+            if subdomains is None:
                 continue
 
             # add the subdomain to the list
@@ -1024,27 +1055,36 @@ class Censys(ModuleApiWithAuth):
             for info in infos:
                 if info.startswith("CN=") == True:
                     common_name = info
+
+            # check if this is a subdomain from our main domain
             subdomain = common_name[3:]
             if subdomain.endswith(domain) == True:
-                pos = subdomain.find('*.')
-                while pos != -1:
-                    subdomain = subdomain[pos + 2:]
-                    pos = subdomain.find('*.')
-                if subdomain.find('*') == -1:
-                    if subdomain not in subdomains:
-                        subdomains.append(subdomain)
+
+                # remove the wildcards from subdomain
+                if subdomain.find('*') != -1:
+                    subdomain = self.get_domain_from_wildcard(subdomain)
+                    if subdomain is None:
+                        continue
+                
+                # add the subdomain to the list
+                if subdomain not in subdomains:
+                    subdomains.append(subdomain)
 
             # check the alternate names
             alternate_names = certificate['names']
             for subdomain in alternate_names:
+
+                # check if this is a subdomain from our main domain
                 if subdomain.endswith(domain) != True:
                     continue
-                pos = subdomain.find('*.')
-                while pos != -1:
-                    subdomain = subdomain[pos + 2:]
-                    pos = subdomain.find('*.')
+
+                # remove the wildcards from subdomain
                 if subdomain.find('*') != -1:
-                    continue
+                    subdomain = self.get_domain_from_wildcard(subdomain)
+                    if subdomain is None:
+                        continue
+
+                # add the subdomain to the list
                 if subdomain in subdomains:
                     continue
                 subdomains.append(subdomain)
