@@ -12,7 +12,8 @@ try:
     from fake_useragent import UserAgent
     from urllib.parse import unquote
     from argparse import ArgumentParser
-    from os import getenv
+    from os import getenv, getcwd
+    from os.path import join
     from dotenv import load_dotenv
     from threading import Thread
     from time import time, sleep
@@ -36,7 +37,7 @@ def main():
     args = parser.parse_args()
 
     # load the api keys
-    load_dotenv()
+    load_dotenv(join(getcwd(), '.env'))
     vt_api_key = getenv('VIRUSTOTAL_API_KEY')
     shodan_api_key = getenv('SHODAN_API_KEY')
     censys_appid = getenv('CENSYS_APP_ID')
