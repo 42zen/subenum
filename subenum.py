@@ -582,8 +582,8 @@ class MerkleMap(ModuleApi):
                 continue
 
             # remove the wildcards from the subdomain
-            subdomains = self.get_domain_from_wildcard(subdomains)
-            if subdomains is None:
+            subdomain = self.get_domain_from_wildcard(subdomain)
+            if subdomain is None:
                 continue
 
             # add the subdomain to the list
