@@ -185,6 +185,7 @@ class ModuleApi:
         if self.in_cache(domain) == True:
             self.subdomains = self.load_cache(domain)
             subdomains_count = len(self.subdomains)
+            self.status = 'Cached'
             self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
             return self.subdomains
 
@@ -576,6 +577,7 @@ class DNSDumpster(ModuleApi):
         if self.in_cache(domain) == True:
             self.subdomains = self.load_cache(domain)
             subdomains_count = len(self.subdomains)
+            self.status = 'Cached'
             self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
             return self.subdomains
 
