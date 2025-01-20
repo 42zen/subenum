@@ -40,7 +40,6 @@ def main():
 
     # load the api keys
     load_dotenv(join(getcwd(), '.env'))
-    load_dotenv()
     vt_api_key = getenv('VIRUSTOTAL_API_KEY')
     shodan_api_key = getenv('SHODAN_API_KEY')
     censys_appid = getenv('CENSYS_APP_ID')
