@@ -172,8 +172,7 @@ class ModuleApi:
         self.status = 'Scanning'
 
         # query the subdomains
-        if self.verbose == True:
-            self.print("Starting subdomains discovery...")
+        self.print("Starting subdomains discovery...")
         response = self.query_domain(domain)
         if response is None:
             return None
@@ -188,9 +187,8 @@ class ModuleApi:
             self.status = 'Scanned'
         
         # return the subdomains
-        if self.verbose == True:
-            subdomains_count = len(self.subdomains)
-            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+        subdomains_count = len(self.subdomains)
+        self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
         return self.subdomains
     
     # query the domain
@@ -268,11 +266,13 @@ class ModuleApi:
     
     # print a message from the module
     def print(self, text):
-        print(f"[*] \033[92m{self.base_name}\033[0m: {text}")
+        if self.verbose != False:
+            print(f"[*] \033[92m{self.base_name}\033[0m: {text}")
 
     # print an error message from the module
     def print_error(self, text):
-        self.print(f"\033[91merror\033[0m: {text}")
+        if self.verbose != False:
+            self.print(f"\033[91merror\033[0m: {text}")
     
 
 # default module search engine class
@@ -285,8 +285,7 @@ class ModuleSearchEngine(ModuleApi):
         self.status = 'Scanning'
 
         # query the first 10 pages
-        if self.verbose == True:
-            self.print("Starting subdomains discovery...")
+        self.print("Starting subdomains discovery...")
         self.subdomains = []
         for page in range(1, 10):
 
@@ -314,9 +313,8 @@ class ModuleSearchEngine(ModuleApi):
             self.status = 'Scanned'
 
         # return the complete list of all subdomains found
-        if self.verbose == True:
-            subdomains_count = len(self.subdomains)
-            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+        subdomains_count = len(self.subdomains)
+        self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
         return self.subdomains
     
     # query a domain page
@@ -361,8 +359,7 @@ class ThreatCrowd(ModuleApi):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -419,14 +416,12 @@ class CertificatesSearch(ModuleApi):
             if try_count < 3:
                 return self.query_domain(domain, try_count=try_count + 1)
             error_text = f"service is currently unavailable."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         elif response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -481,8 +476,7 @@ class DNSDumpster(ModuleApi):
         self.status = 'Scanning'
 
         # query the csrf token
-        if self.verbose == True:
-            self.print("Starting subdomains discovery...")
+        self.print("Starting subdomains discovery...")
         response = self.query_csrf_token()
         if response is None:
             return None
@@ -507,9 +501,8 @@ class DNSDumpster(ModuleApi):
             self.status = 'Scanned'
         
         # return the subdomains
-        if self.verbose == True:
-            subdomains_count = len(self.subdomains)
-            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+        subdomains_count = len(self.subdomains)
+        self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
         return self.subdomains
     
     # query a csrf token from dnsdumpster
@@ -521,8 +514,7 @@ class DNSDumpster(ModuleApi):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code '{response.status_code}' while trying to get csrf token."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -547,8 +539,7 @@ class DNSDumpster(ModuleApi):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -600,8 +591,7 @@ class MerkleMap(ModuleApi):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
     
@@ -653,14 +643,12 @@ class Google(ModuleSearchEngine):
         # check for errors
         if response.status_code == 429:
             error_text = "too many requests."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         elif response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -674,8 +662,7 @@ class Google(ModuleSearchEngine):
         soup = BeautifulSoup(text, features="html.parser")
         if soup.find('title').text.find(domain) == -1:
             error_text = "captcha detected."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -697,8 +684,7 @@ class Google(ModuleSearchEngine):
         # check if we are shadow banned
         if total_urls == 0:
             error_text = "shadow ban detected."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -735,8 +721,7 @@ class Bing(ModuleSearchEngine):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -751,8 +736,7 @@ class Bing(ModuleSearchEngine):
             soup = BeautifulSoup(text, features="html.parser")
         except TypeError:
             error_text = "received unknown content type."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -760,8 +744,7 @@ class Bing(ModuleSearchEngine):
         title = soup.find('title').text
         if title.find(domain) == -1:
             error_text = "captcha detected."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -775,8 +758,7 @@ class Bing(ModuleSearchEngine):
         for result in results:
             link = result.find('a', {'class': 'tilk'})
             if link is None:
-                if self.verbose == True:
-                    self.print_error("shadow ban detected.")
+                self.print_error("shadow ban detected.")
                 return None
             link = link['href']
             if link.startswith('https://') == True:
@@ -794,8 +776,7 @@ class Bing(ModuleSearchEngine):
         # check if we got a shadow ban
         if results_domains == [ 'www.bing.com' ]:
             error_text = "shadow ban detected."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -831,8 +812,7 @@ class Yahoo(ModuleSearchEngine):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -848,8 +828,7 @@ class Yahoo(ModuleSearchEngine):
             soup = BeautifulSoup(text, features="html.parser")
         except TypeError:
             error_text = "received unknown content type."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -898,8 +877,7 @@ class VirusTotal(ModuleApiWithKey):
         self.status = 'Scanning'
 
         # download all subdomains from a domain
-        if self.verbose == True:
-            self.print("Starting subdomains discovery...")
+        self.print("Starting subdomains discovery...")
         self.subdomains = self.download_relationship(domain)
 
         # check if we got an error
@@ -911,9 +889,8 @@ class VirusTotal(ModuleApiWithKey):
             self.status = 'Scanned'
         
         # return the list of subdomains found
-        if self.verbose == True:
-            subdomains_count = len(self.subdomains)
-            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+        subdomains_count = len(self.subdomains)
+        self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
         return self.subdomains
 
     # download a relationship
@@ -1015,8 +992,7 @@ class Shodan(ModuleApiWithKey):
         # check for errors
         if response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         
@@ -1048,8 +1024,7 @@ class Censys(ModuleApiWithAuth):
         self.status = 'Scanning'
 
         # get the first page
-        if self.verbose == True:
-            self.print("Starting subdomains discovery...")
+        self.print("Starting subdomains discovery...")
         self.subdomains = []
         response = self.query_domain_page(domain)
         if response is None:
@@ -1091,9 +1066,8 @@ class Censys(ModuleApiWithAuth):
             self.status = 'Scanned'
     
         # return the list of subdomains found
-        if self.verbose == True:
-            subdomains_count = len(self.subdomains)
-            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+        subdomains_count = len(self.subdomains)
+        self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
         return self.subdomains
 
     # get a domain page
@@ -1115,20 +1089,17 @@ class Censys(ModuleApiWithAuth):
         # check for errors
         if response.status_code == 429:
             error_text = "too many requests."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         elif response.status_code == 403:
             error_text = f"forbidden: '{response.text}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
         elif response.status_code != 200:
             error_text = f"received unknown response code: '{response.status_code}'."
-            if self.verbose == True:
-                self.print_error(error_text)
+            self.print_error(error_text)
             self.status = error_text
             return None
 
