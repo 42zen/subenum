@@ -12,11 +12,12 @@ try:
     from fake_useragent import UserAgent
     from urllib.parse import unquote
     from argparse import ArgumentParser
-    from os import getenv, getcwd
-    from os.path import join
+    from os import getenv, getcwd, mkdir
+    from os.path import join, exists
     from dotenv import load_dotenv
     from threading import Thread
     from time import time, sleep
+    from json import load, dump
 except KeyboardInterrupt:
     print(banner)
     print("[*] Exiting...")
@@ -33,6 +34,7 @@ def main():
     parser.add_argument('domain', type=str, help="Domain to search for subdomains")
     parser.add_argument('-o', '--output', type=str, help="Save the output in a text file")
     parser.add_argument('-f', '--fast', action='store_true', help="Enable fast mode")
+    parser.add_argument('-c', '--cache', type=str, help="Cache all query to a folder")
     parser.add_argument('-q', '--quiet', action='store_true', help="Disable verbosity")
     args = parser.parse_args()
 
@@ -52,7 +54,8 @@ def main():
         shodan_api_key=shodan_api_key,
         censys_appid=censys_appid,
         censys_secret=censys_secret,
-        fast=args.fast
+        fast=args.fast,
+        cache=args.cache
     )
     subdomains = subenum.get_subdomains(args.domain)
 
@@ -73,28 +76,28 @@ def main():
 class SubEnum():
 
     # create a subenum object
-    def __init__(self, verbose=True, vt_api_key=None, shodan_api_key=None, censys_appid=None, censys_secret=None, fast=False):
+    def __init__(self, verbose=True, vt_api_key=None, shodan_api_key=None, censys_appid=None, censys_secret=None, fast=False, cache=None):
         self.verbose = verbose
 
         # load all the modules
         self.modules = []
-        self.modules.append(ThreatCrowd(verbose=verbose))
-        self.modules.append(CertificatesSearch(verbose=verbose))
-        self.modules.append(DNSDumpster(verbose=verbose))
-        self.modules.append(Google(verbose=verbose, fast=fast))
-        self.modules.append(Bing(verbose=verbose, fast=fast))
-        self.modules.append(Yahoo(verbose=verbose, fast=fast))
-        self.modules.append(MerkleMap(verbose=verbose))
+        self.modules.append(ThreatCrowd(verbose=verbose, cache=cache))
+        self.modules.append(CertificatesSearch(verbose=verbose, cache=cache))
+        self.modules.append(DNSDumpster(verbose=verbose, cache=cache))
+        self.modules.append(MerkleMap(verbose=verbose, cache=cache))
+        self.modules.append(Google(verbose=verbose, fast=fast, cache=cache))
+        self.modules.append(Bing(verbose=verbose, fast=fast, cache=cache))
+        self.modules.append(Yahoo(verbose=verbose, fast=fast, cache=cache))
 
         # load all the modules that needs api keys
         if vt_api_key is not None:
-            self.modules.append(VirusTotal(vt_api_key, verbose=verbose, fast=fast))
+            self.modules.append(VirusTotal(vt_api_key, verbose=verbose, fast=fast, cache=cache))
             print(f"[*] \033[92mVirusTotal\033[0m api key loaded!.")
         if shodan_api_key is not None:
-            self.modules.append(Shodan(shodan_api_key, verbose=verbose))
+            self.modules.append(Shodan(shodan_api_key, verbose=verbose, cache=cache))
             print(f"[*] \033[92mShodan\033[0m api key loaded!.")
         if censys_appid is not None and censys_secret is not None:
-            self.modules.append(Censys(censys_appid, censys_secret, verbose=verbose, fast=fast))
+            self.modules.append(Censys(censys_appid, censys_secret, verbose=verbose, fast=fast, cache=cache))
             print(f"[*] \033[92mCensys\033[0m api key loaded!.")
 
     # get a list of subdomains
@@ -162,22 +165,30 @@ class SubEnum():
 class ModuleApi:
 
     # create an api object
-    def __init__(self, verbose=True, fast=False):
+    def __init__(self, verbose=True, fast=False, cache=None):
         self.base_name = self.__class__.__name__
         self.session = Session()
         self.verbose = verbose
         self.subdomains = None
         self.fast_scan = fast
         self.status = 'Waiting'
+        self.cache = cache
 
     # get the subdomains from the api
     def get_subdomains(self, domain):
 
         # update the status
         self.status = 'Scanning'
+        self.print("Starting subdomains discovery...")
+
+        # load the cache if possible
+        if self.in_cache(domain) == True:
+            self.subdomains = self.load_cache(domain)
+            subdomains_count = len(self.subdomains)
+            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+            return self.subdomains
 
         # query the subdomains
-        self.print("Starting subdomains discovery...")
         response = self.query_domain(domain)
         if response is None:
             return None
@@ -186,6 +197,10 @@ class ModuleApi:
         self.subdomains = self.parse_query_response(response, domain)
         if self.subdomains is None:
             return None
+
+        # save the cache if needed
+        if self.cache is not None:
+            self.save_cache(domain, self.subdomains)
 
         # update the status
         if self.status == 'Scanning':
@@ -278,6 +293,73 @@ class ModuleApi:
     def print_error(self, text):
         if self.verbose != False:
             self.print(f"\033[91merror\033[0m: {text}")
+
+    # init the cache
+    def init_cache(self):
+        if self.cache is not None:
+            try:
+                mkdir(self.cache)
+            except FileExistsError:
+                pass
+            try:
+                mkdir(join(self.cache, self.base_name))
+            except FileExistsError:
+                pass
+
+    # check if a query is in cache
+    def in_cache(self, query, page=None):
+        if self.cache is None:
+            return False
+        query = self.sanatize_cache_query(query)
+        file_name = f"{query}.json" if page is None else f"{query}.{page}.json"
+        file_path = join(self.base_name, file_name)
+        return exists(join(self.cache, file_path))
+    
+    # load a query from the cache
+    def load_cache(self, query, page=None):
+        if self.cache is None:
+            return None
+        query = self.sanatize_cache_query(query)
+        file_name = f"{query}.json" if page is None else f"{query}.{page}.json"
+        file_path = join(self.base_name, file_name)
+        with open(join(self.cache, file_path), 'r') as json_file:
+            subdomains = load(json_file)
+        return subdomains
+    
+    # load a cursor from the cache
+    def load_cache_cursor(self, query, page=None):
+        if self.cache is None:
+            return None
+        query = self.sanatize_cache_query(query)
+        file_name = f"{query}.cursor.json" if page is None else f"{query}.{page}.cursor.json"
+        file_path = join(self.base_name, file_name)
+        with open(join(self.cache, file_path), 'r') as json_file:
+            subdomains = load(json_file)
+        return subdomains
+    
+    # save a query results to the cache
+    def save_cache(self, query, subdomains, page=None):
+        if self.cache is not None:
+            self.init_cache()
+            query = self.sanatize_cache_query(query)
+            file_name = f"{query}.json" if page is None else f"{query}.{page}.json"
+            file_path = join(self.base_name, file_name)
+            with open(join(self.cache, file_path), 'w') as json_file:
+                dump(subdomains, json_file, indent=4)
+    
+    # save a cursor results to the cache
+    def save_cache_cursor(self, query, cursor, page=None):
+        if self.cache is not None:
+            self.init_cache()
+            query = self.sanatize_cache_query(query)
+            file_name = f"{query}.cursor.json" if page is None else f"{query}.{page}.cursor.json"
+            file_path = join(self.base_name, file_name)
+            with open(join(self.cache, file_path), 'w') as json_file:
+                dump(cursor, json_file, indent=4)
+
+    # sanatize cache queries
+    def sanatize_cache_query(self, query):
+        return query
     
 
 # default module search engine class
@@ -288,21 +370,30 @@ class ModuleSearchEngine(ModuleApi):
 
         # update the status
         self.status = 'Scanning'
+        self.print("Starting subdomains discovery...")
 
         # query the first 10 pages
-        self.print("Starting subdomains discovery...")
         self.subdomains = []
         for page in range(1, 10):
 
-            # query the current page
-            response = self.query_domain_page(domain, page)
-            if response is None:
-                break
+            # load the cache if possible
+            if self.in_cache(domain, page=page) == True:
+                page_subdomains = self.load_cache(domain, page=page)
 
-            # parse the subdomains from the page response
-            page_subdomains = self.parse_query_response(response, domain)
-            if page_subdomains is None:
-                break
+            # query the current page
+            else:
+                response = self.query_domain_page(domain, page)
+                if response is None:
+                    break
+
+                # parse the subdomains from the page response
+                page_subdomains = self.parse_query_response(response, domain)
+                if page_subdomains is None:
+                    break
+
+                # save the cache if needed
+                if self.cache is not None:
+                    self.save_cache(domain, page_subdomains, page=page)
 
             # add the subdomains found to the list
             for subdomain in page_subdomains:
@@ -332,8 +423,8 @@ class ModuleSearchEngine(ModuleApi):
 class ModuleApiWithKey(ModuleApi):
 
     # create an api object
-    def __init__(self, api_key, verbose=True, fast=False):
-        super().__init__(verbose=verbose, fast=fast)
+    def __init__(self, api_key, verbose=True, fast=False, cache=None):
+        super().__init__(verbose=verbose, fast=fast, cache=cache)
         self.api_key = api_key
 
 
@@ -341,8 +432,8 @@ class ModuleApiWithKey(ModuleApi):
 class ModuleApiWithAuth(ModuleApi):
 
     # create an api object
-    def __init__(self, username, password, verbose=True, fast=False):
-        super().__init__(verbose=verbose, fast=fast)
+    def __init__(self, username, password, verbose=True, fast=False, cache=None):
+        super().__init__(verbose=verbose, fast=fast, cache=cache)
         self.auth = HTTPBasicAuth(username, password)
 
 
@@ -350,8 +441,8 @@ class ModuleApiWithAuth(ModuleApi):
 class ThreatCrowd(ModuleApi):
 
     # create a ThreatCrowd object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, cache=None):
+        super().__init__(verbose=verbose, cache=cache)
         self.base_url = "http://ci-www.threatcrowd.org/graphHtml.php"
 
     # download a domain report
@@ -405,8 +496,8 @@ class ThreatCrowd(ModuleApi):
 class CertificatesSearch(ModuleApi):
 
     # create a crtsh object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, cache=None):
+        super().__init__(verbose=verbose, cache=cache)
         self.base_url = "https://crt.sh/"
     
     # query a domain informations from crt.sh
@@ -470,8 +561,8 @@ class CertificatesSearch(ModuleApi):
 class DNSDumpster(ModuleApi):
 
     # create a dnsdumpster object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, cache=None):
+        super().__init__(verbose=verbose, cache=cache)
         self.base_url = "https://dnsdumpster.com/"
 
     # get the subdomains from dnsdumpster
@@ -479,9 +570,16 @@ class DNSDumpster(ModuleApi):
 
         # update the status
         self.status = 'Scanning'
+        self.print("Starting subdomains discovery...")
+
+        # load the cache if possible
+        if self.in_cache(domain) == True:
+            self.subdomains = self.load_cache(domain)
+            subdomains_count = len(self.subdomains)
+            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
+            return self.subdomains
 
         # query the csrf token
-        self.print("Starting subdomains discovery...")
         response = self.query_csrf_token()
         if response is None:
             return None
@@ -500,6 +598,10 @@ class DNSDumpster(ModuleApi):
         self.subdomains = self.parse_query_response(response, domain)
         if self.subdomains is None:
             return None
+
+        # save the cache if needed
+        if self.cache is not None:
+            self.save_cache(domain, self.subdomains)
 
         # update the status
         if self.status == 'Scanning':
@@ -581,8 +683,8 @@ class DNSDumpster(ModuleApi):
 class MerkleMap(ModuleApi):
 
     # create a merklemap object
-    def __init__(self, verbose=True):
-        super().__init__(verbose=verbose)
+    def __init__(self, verbose=True, cache=None):
+        super().__init__(verbose=verbose, cache=cache)
         self.base_url = "https://api.merklemap.com/search"
         self.user_agent = UserAgent().random
 
@@ -633,8 +735,8 @@ class MerkleMap(ModuleApi):
 class Google(ModuleSearchEngine):
 
     # create a google object
-    def __init__(self, verbose=True, fast=False):
-        super().__init__(verbose=verbose, fast=fast)
+    def __init__(self, verbose=True, fast=False, cache=None):
+        super().__init__(verbose=verbose, fast=fast, cache=cache)
         self.base_url = "https://www.google.com/search"
 
     # query a domain page from google
@@ -709,8 +811,8 @@ class Google(ModuleSearchEngine):
 class Bing(ModuleSearchEngine):
 
     # create a bing object
-    def __init__(self, verbose=True, fast=False):
-        super().__init__(verbose=verbose, fast=fast)
+    def __init__(self, verbose=True, fast=False, cache=None):
+        super().__init__(verbose=verbose, fast=fast, cache=cache)
         self.base_url = "https://www.bing.com/search"
         self.user_agent = UserAgent().random
 
@@ -793,8 +895,8 @@ class Bing(ModuleSearchEngine):
 class Yahoo(ModuleSearchEngine):
 
     # create a yahoo object
-    def __init__(self, verbose=True, fast=False):
-        super().__init__(verbose=verbose, fast=fast)
+    def __init__(self, verbose=True, fast=False, cache=None):
+        super().__init__(verbose=verbose, fast=fast, cache=cache)
         self.base_url = "https://fr.search.yahoo.com/search"
         self.user_agent = UserAgent().random
 
@@ -871,8 +973,8 @@ class Yahoo(ModuleSearchEngine):
 class VirusTotal(ModuleApiWithKey):
 
     # create a VirusTotal object
-    def __init__(self, api_key, verbose=True, fast=False):
-        super().__init__(api_key, verbose=verbose, fast=fast)
+    def __init__(self, api_key, verbose=True, fast=False, cache=None):
+        super().__init__(api_key, verbose=verbose, fast=fast, cache=cache)
         self.base_url = "https://www.virustotal.com/api/v3/domains/"
 
     # get a list of subdomains
@@ -901,43 +1003,72 @@ class VirusTotal(ModuleApiWithKey):
     # download a relationship
     def download_relationship(self, domain):
 
+        # load the cache if possible
+        if self.in_cache(domain) == True:
+            subdomains = self.load_cache(domain)
+            cursor = self.load_cache_cursor(domain)
+
         # download the first domain page
-        results = self.download_relationship_page(domain)
-        if results is None:
-            return None
-        
-        # parse the subdomains from the first page
-        subdomains = []
-        for subdomain in results['data']:
-            if subdomain['id'] not in subdomains:
-                subdomains.append(subdomain['id'])
+        else:
+            results = self.download_relationship_page(domain)
+            if results is None:
+                return None
+            
+            # parse the subdomains from the first page
+            subdomains = []
+            for subdomain in results['data']:
+                if subdomain['id'] not in subdomains:
+                    subdomains.append(subdomain['id'])
+
+            # parse the next page cursor from the first page
+            cursor = None
+            if 'cursor' in results['meta']:
+                cursor = results['meta']['cursor']
+
+            # save the cache if needed
+            if self.cache is not None:
+                self.save_cache(domain, subdomains)
+                self.save_cache_cursor(domain, cursor)
 
         # return the first page if we do a fast scan
         if self.fast_scan == True:
             return subdomains
 
-        # parse the next page cursor from the first page
-        cursor = None
-        if 'cursor' in results['meta']:
-            cursor = results['meta']['cursor']
-
         # download pages until there is no next one
         while cursor is not None:
 
-            # download the next domain page
-            results = self.download_relationship_page(domain, cursor=cursor)
-            if results is None:
-                break
-            
-            # parse the subdomains from the next page
-            for subdomain in results['data']:
-                if subdomain['id'] not in subdomains:
-                    subdomains.append(subdomain['id'])
+            # load the cache if possible
+            if self.in_cache(domain, page=cursor) == True:
+                page_subdomains = self.load_cache(domain, page=cursor)
+                cursor = self.load_cache_cursor(domain, page=cursor)
 
-            # parse the next page cursor from the next page
-            cursor = None
-            if 'cursor' in results['meta']:
-                cursor = results['meta']['cursor']
+            # download the next domain page
+            else:
+                results = self.download_relationship_page(domain, cursor=cursor)
+                if results is None:
+                    break
+                
+                # parse the subdomains from the page
+                page_subdomains = []
+                for subdomain in results['data']:
+                    if subdomain['id'] not in page_subdomains:
+                        page_subdomains.append(subdomain['id'])
+
+                # parse the next page cursor from the page
+                next_cursor = None
+                if 'cursor' in results['meta']:
+                    next_cursor = results['meta']['cursor']
+
+                # save the cache if needed
+                if self.cache is not None:
+                    self.save_cache(domain, page_subdomains, page=cursor)
+                    self.save_cache_cursor(domain, next_cursor, page=cursor)
+                cursor = next_cursor
+
+            # add the subdomains from the page
+            for subdomain in page_subdomains:
+                if subdomain not in subdomains:
+                    subdomains.append(subdomain)
 
         # return a list of all subdomains found
         return subdomains
@@ -983,8 +1114,8 @@ class VirusTotal(ModuleApiWithKey):
 class Shodan(ModuleApiWithKey):
 
     # create a shodan object
-    def __init__(self, api_key, verbose=True):
-        super().__init__(api_key, verbose=verbose)
+    def __init__(self, api_key, verbose=True, cache=None):
+        super().__init__(api_key, verbose=verbose, cache=cache)
         self.base_url = "https://api.shodan.io/dns/domain/"
     
     # query a domain information from shodan
@@ -1018,8 +1149,8 @@ class Shodan(ModuleApiWithKey):
 class Censys(ModuleApiWithAuth):
 
     # create a censys object
-    def __init__(self, app_id, secret, verbose=True, fast=False):
-        super().__init__(app_id, secret, verbose=verbose, fast=fast)
+    def __init__(self, app_id, secret, verbose=True, fast=False, cache=None):
+        super().__init__(app_id, secret, verbose=verbose, fast=fast, cache=cache)
         self.base_url = 'https://search.censys.io/api/v2/certificates/search'
 
     # get the subdomains from a domain
@@ -1027,17 +1158,33 @@ class Censys(ModuleApiWithAuth):
 
         # update the status
         self.status = 'Scanning'
-
-        # get the first page
         self.print("Starting subdomains discovery...")
         self.subdomains = []
-        response = self.query_domain_page(domain)
-        if response is None:
-            return self.subdomains
+
+        # load the cache if possible
+        if self.in_cache(domain) == True:
+            page_subdomains = self.load_cache(domain)
+            cursor = self.load_cache_cursor(domain)
+
+        # get the first page
+        else:
+            response = self.query_domain_page(domain)
+            if response is None:
+                return self.subdomains
+            
+            # parse the subdomains from the first pages
+            page_count = 1
+            page_subdomains = self.parse_query_response(response, domain)
+
+            # get the next page cursor if any
+            cursor = response['result']['links']['next']
+
+            # save the cache if needed
+            if self.cache is not None:
+                self.save_cache(domain, page_subdomains)
+                self.save_cache_cursor(domain, cursor)
         
-        # parse the subdomains from the first pages
-        page_count = 1
-        page_subdomains = self.parse_query_response(response, domain)
+        # add the subdomains to the list
         for subdomain in page_subdomains:
             if subdomain in self.subdomains:
                 continue
@@ -1049,22 +1196,37 @@ class Censys(ModuleApiWithAuth):
                 self.status = 'Scanned'
             return self.subdomains
 
-        # get the next page cursor if any
-        cursor = response['result']['links']['next']
-
         # get all next pages
         while cursor != '' and page_count < 10:
             page_count += 1
-            sleep(0.4)
-            response = self.query_domain_page(domain, cursor=cursor)
-            if response is None:
-                break
-            page_subdomains = self.parse_query_response(response, domain)
+
+            # load the cache if possible
+            if self.in_cache(domain, page=cursor) == True:
+                page_subdomains = self.load_cache(domain, page=cursor)
+                cursor = self.load_cache_cursor(domain, page=cursor)
+
+            # get the next subdomains
+            else:
+                sleep(0.4)
+                response = self.query_domain_page(domain, cursor=cursor)
+                if response is None:
+                    break
+                page_subdomains = self.parse_query_response(response, domain)
+            
+                # get the next page cursor if any
+                next_cursor = response['result']['links']['next']
+
+                # save the cache if needed
+                if self.cache is not None:
+                    self.save_cache(domain, page_subdomains, page=cursor)
+                    self.save_cache_cursor(domain, next_cursor, page=cursor)
+                cursor = next_cursor
+            
+            # add the subdomains to the list
             for subdomain in page_subdomains:
                 if subdomain in self.subdomains:
                     continue
                 self.subdomains.append(subdomain)
-            cursor = response['result']['links']['next']
 
         # update the status
         if self.status == 'Scanning':
