@@ -102,7 +102,7 @@ class SubEnum():
 
         # get the subdomains from all the modules
         start_time = time()
-        subdomains = self.run_modules_scan(domain)
+        status, subdomains = self.run_modules_scan(domain)
         elapsed_time = "%0.2f" % (time() - start_time)
 
         # sort all the subdomains
@@ -140,8 +140,13 @@ class SubEnum():
                     if subdomain not in subdomains:
                         subdomains.append(subdomain)
 
-        # return the subdomains found
-        return subdomains
+        # build a list of status
+        status_list = {}
+        for module in self.modules:
+            status_list[module.base_name] = module.status
+
+        # return the status and subdomains found
+        return status_list, subdomains
 
     # sort a list of subdomains
     def sort_subdomains(self, subdomains):
