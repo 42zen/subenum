@@ -83,7 +83,7 @@ class SubEnum():
         self.modules = []
         self.modules.append(ThreatCrowd(verbose=verbose, cache=cache))
         self.modules.append(CertificatesSearch(verbose=verbose, cache=cache))
-        self.modules.append(DNSDumpster(verbose=verbose, cache=cache))
+        #self.modules.append(DNSDumpster(verbose=verbose, cache=cache))
         self.modules.append(MerkleMap(verbose=verbose, cache=cache))
         self.modules.append(Google(verbose=verbose, fast=fast, cache=cache))
         self.modules.append(Bing(verbose=verbose, fast=fast, cache=cache))
@@ -554,129 +554,6 @@ class CertificatesSearch(ModuleApi):
                                     subdomains.append(subdomain)
                         field_id += 1
         
-        # return the subdomains found
-        return subdomains
-
-
-# DNSDumpster api
-class DNSDumpster(ModuleApi):
-
-    # create a dnsdumpster object
-    def __init__(self, verbose=True, cache=None):
-        super().__init__(verbose=verbose, cache=cache)
-        self.base_url = "https://dnsdumpster.com/"
-
-    # get the subdomains from dnsdumpster
-    def get_subdomains(self, domain):
-
-        # update the status
-        self.status = 'Scanning'
-        self.print("Starting subdomains discovery...")
-
-        # load the cache if possible
-        if self.in_cache(domain) == True:
-            self.subdomains = self.load_cache(domain)
-            subdomains_count = len(self.subdomains)
-            self.status = 'Cached'
-            self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
-            return self.subdomains
-
-        # query the csrf token
-        response = self.query_csrf_token()
-        if response is None:
-            return None
-
-        # parse the csrf token from the response
-        csrf_token = self.parse_csrf_token_response(response)
-        if csrf_token is None:
-            return None
-
-        # query the domain from dnsdumpster
-        response = self.query_domain(domain, csrf_token)
-        if response is None:
-            return None
-
-        # parse the subdomains from the response
-        self.subdomains = self.parse_query_response(response, domain)
-        if self.subdomains is None:
-            return None
-
-        # save the cache if needed
-        if self.cache is not None:
-            self.save_cache(domain, self.subdomains)
-
-        # update the status
-        if self.status == 'Scanning':
-            self.status = 'Scanned'
-        
-        # return the subdomains
-        subdomains_count = len(self.subdomains)
-        self.print(f"{subdomains_count if subdomains_count > 0 else 'no'} subdomain{'s' if subdomains_count != 1 else ''} found.")
-        return self.subdomains
-    
-    # query a csrf token from dnsdumpster
-    def query_csrf_token(self):
-
-        # query the website
-        response = self.session.get(self.base_url)
-
-        # check for errors
-        if response.status_code != 200:
-            error_text = f"received unknown response code '{response.status_code}' while trying to get csrf token."
-            self.print_error(error_text)
-            self.status = error_text
-            return None
-        
-        # return the response text
-        return response.text
-    
-    # parse a query response
-    def parse_csrf_token_response(self, text):
-        soup = BeautifulSoup(text, features="html.parser")
-        input = soup.find('input', {'name': 'csrfmiddlewaretoken'})
-        return input["value"]
-    
-    # query a domain informations from dnsdumpster
-    def query_domain(self, domain, csrf_token):
-
-        # query the website
-        cookies = { 'csrftoken': self.session.cookies["csrftoken"] }
-        headers = { 'referer': 'https://dnsdumpster.com/' }
-        data = { 'csrfmiddlewaretoken': csrf_token, 'targetip': domain, 'user': 'free' }
-        response = self.session.post(self.base_url, cookies=cookies, headers=headers, data=data)
-
-        # check for errors
-        if response.status_code != 200:
-            error_text = f"received unknown response code: '{response.status_code}'."
-            self.print_error(error_text)
-            self.status = error_text
-            return None
-        
-        # return the response text
-        return response.text
-    
-    # parse a query response from dnsdumpster
-    def parse_query_response(self, text, domain):
-        
-        # convert the text response to html
-        soup = BeautifulSoup(text, features="html.parser")
-        tables = soup.find_all('table', {'class': 'table'})
-
-        # parse the subdomains from the tables
-        subdomains = []
-        for table in tables:
-            td_list = table.find_all('td', {'class': 'col-md-4'})
-            for td in td_list:
-                for elem in td:
-                    subdomain = str(elem)
-                    pos = subdomain.find(' ')
-                    if pos != -1:
-                        subdomain = subdomain[pos + 1:]
-                    if subdomain.endswith(domain) == True:
-                        if subdomain not in subdomains:
-                            subdomains.append(subdomain)
-                    break
-
         # return the subdomains found
         return subdomains
 
