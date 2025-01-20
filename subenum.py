@@ -84,7 +84,7 @@ class SubEnum():
         self.modules.append(ThreatCrowd(verbose=verbose, cache=cache))
         self.modules.append(CertificatesSearch(verbose=verbose, cache=cache))
         #self.modules.append(DNSDumpster(verbose=verbose, cache=cache))
-        self.modules.append(MerkleMap(verbose=verbose, cache=cache))
+        #self.modules.append(MerkleMap(verbose=verbose, cache=cache))
         self.modules.append(Google(verbose=verbose, fast=fast, cache=cache))
         self.modules.append(Bing(verbose=verbose, fast=fast, cache=cache))
         self.modules.append(Yahoo(verbose=verbose, fast=fast, cache=cache))
