@@ -558,58 +558,6 @@ class CertificatesSearch(ModuleApi):
         return subdomains
 
 
-# MerkleMap api
-class MerkleMap(ModuleApi):
-
-    # create a merklemap object
-    def __init__(self, verbose=True, cache=None):
-        super().__init__(verbose=verbose, cache=cache)
-        self.base_url = "https://api.merklemap.com/search"
-        self.user_agent = UserAgent().random
-
-    # query a domain information from merklemap
-    def query_domain(self, domain):
-
-        # query the api
-        params = { 'query': domain }
-        response = self.session.get(self.base_url, params=params)
-
-        # check for errors
-        if response.status_code != 200:
-            error_text = f"received unknown response code: '{response.status_code}'."
-            self.print_error(error_text)
-            self.status = error_text
-            return None
-    
-        # return the json response
-        return response.json()
-
-    # parse the query response
-    def parse_query_response(self, data, domain):
-
-        # browse each subdomain from the results
-        subdomains = []
-        for result in data["results"]:
-
-            # check if this is a subdomain from our domain
-            subdomain = result['domain']
-            if subdomain.endswith(domain) == False:
-                continue
-
-            # remove the wildcards from the subdomain
-            subdomain = self.get_domain_from_wildcard(subdomain)
-            if subdomain is None:
-                continue
-
-            # add the subdomain to the list
-            if subdomain in subdomains:
-                continue
-            subdomains.append(subdomain)
-
-        # return the list of subdomains
-        return subdomains
-    
-
 # Google api
 class Google(ModuleSearchEngine):
 
