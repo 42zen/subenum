@@ -1260,7 +1260,7 @@ class Censys(ModuleApiWithAuth):
             self.status = error_text
             return None
         elif response.status_code == 403:
-            error_text = f"forbidden: '{response.text}'."
+            error_text = f"forbidden: '{response.json()['error']}'."
             self.print_error(error_text)
             self.status = error_text
             return None
